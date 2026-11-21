@@ -4,7 +4,7 @@
  * MIT License. Not affiliated with exodraft a/s.
  */
 
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.0.1";
 
 const DEFAULT_ENTITIES = {
   fan: "switch.{p}_fan",
@@ -66,11 +66,12 @@ class ExodraftCard extends HTMLElement {
   }
 
   getCardSize() {
-    return 4;
+    return 7;
   }
 
   getGridOptions() {
-    return { columns: 12, rows: 4, min_columns: 6, min_rows: 3 };
+    // Height follows the content: the display grows on narrow screens and with the status line.
+    return { columns: 12, rows: "auto", min_columns: 6 };
   }
 
   _state(key) {
