@@ -154,7 +154,7 @@ class ExodraftCard extends HTMLElement {
         button svg { width: 22px; height: 22px; fill: currentColor; }
         button.power.on { color: var(--exo-ember-hot); border-color: var(--exo-ember); }
         button .lbl { font-size: 12px; color: var(--secondary-text-color); }
-        .status { margin-top: 10px; font-size: 13px; color: var(--secondary-text-color); min-height: 18px; }
+        .status { margin: -4px 0 10px; font-size: 13px; color: var(--secondary-text-color); min-height: 18px; }
         .status.warn { color: var(--warning-color, #db8b00); }
         .nosignal { font-size: 30px; text-align: center; padding: 40px 0; }
         @media (max-width: 380px) {
@@ -166,6 +166,7 @@ class ExodraftCard extends HTMLElement {
           <span class="name"></span>
           <span class="led"><i></i><span class="ledtxt"></span></span>
         </div>
+        <div class="status" aria-live="polite"></div>
         <div class="body">
           <div class="lcd" role="group" aria-label="Fan display">
             <div class="screen">
@@ -196,7 +197,6 @@ class ExodraftCard extends HTMLElement {
             </button>
           </div>
         </div>
-        <div class="status" aria-live="polite"></div>
       </ha-card>
     `;
     const $ = (s) => this._root.querySelector(s);
