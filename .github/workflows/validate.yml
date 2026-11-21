@@ -1,0 +1,50 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+jobs:
+  hacs:
+    name: HACS validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: plugin
+
+  esphome:
+    name: ESPHome config check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install esphome
+      - name: Check configurations
+        working-directory: esphome
+        run: |
+          cat > secrets.yaml <<'SECRETS'
+          wifi_ssid: ci
+          wifi_password: ci-password
+          exodraft_api_key: "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI="
+          exodraft_ota_password: ci
+          SECRETS
+          sed -e '/^packages:/,$d' example-device.yaml > ci-device.yaml
+          printf 'packages:\n  exodraft: !include exodraft-ew41.yaml\n' >> ci-device.yaml
+          esphome config ci-device.yaml
+          esphome config exodraft-discovery.yaml
+
+  card:
+    name: Card syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: node --check dist/exodraft-card.js

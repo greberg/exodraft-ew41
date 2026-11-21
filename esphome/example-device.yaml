@@ -1,0 +1,45 @@
+# Copy this file into your ESPHome configuration directory and adjust it.
+# Everything exodraft-specific lives in the package; this file only holds
+# the board, network settings and the values for your own installation.
+
+substitutions:
+  # From the panel's software screen
+  home_id_0: "0xD4"
+  home_id_1: "0xE3"
+  home_id_2: "0x61"
+  home_id_3: "0x93"
+  # From the discovery config (see docs/discovery.md)
+  power_unit_node: "0x09"
+  power_unit_sync: "0xF6"
+  frequency: 868.469MHz
+
+esphome:
+  name: exodraft
+  friendly_name: Exodraft
+
+esp32:
+  board: esp32dev
+
+logger:
+  level: DEBUG
+
+api:
+  encryption:
+    key: !secret exodraft_api_key
+
+ota:
+  - platform: esphome
+    password: !secret exodraft_ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+packages:
+  exodraft:
+    url: https://github.com/greberg/exodraft-ew41
+    ref: main
+    files: [esphome/exodraft-ew41.yaml]
+    refresh: 1d
+  # Or, with a local copy of the package next to this file:
+  # exodraft: !include exodraft-ew41.yaml

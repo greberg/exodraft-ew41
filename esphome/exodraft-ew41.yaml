@@ -1,0 +1,397 @@
+# exodraft EW41 wireless flue gas fan -> Home Assistant
+# ESPHome package for ESP32 + CC1101 (868 MHz).
+#
+# Include this file from your own device configuration (see example-device.yaml)
+# and override the substitutions below with the values for your installation.
+# See docs/discovery.md for how to find your Home ID, node IDs and frequency offset.
+
+substitutions:
+  # Radio wiring (ESP32 VSPI)
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+  miso_pin: GPIO19
+  cs_pin: GPIO5
+  gdo0_pin: GPIO4
+
+  # Z-Wave EU channel 868.42 MHz plus your module's crystal offset.
+  # Calibrate with the discovery config: frequency = 868.42 MHz + average foff.
+  frequency: 868.42MHz
+
+  # Home ID shown on the EW41 panel's software screen, one byte per substitution.
+  home_id_0: "0xD4"
+  home_id_1: "0xE3"
+  home_id_2: "0x61"
+  home_id_3: "0x93"
+
+  # Node IDs. The panel is the primary controller and is normally node 1.
+  panel_node: "0x01"
+  power_unit_node: "0x09"
+  # Must be 0xFF minus power_unit_node (0x09 -> 0xF6, 0x05 -> 0xFA, 0x02 -> 0xFD).
+  power_unit_sync: "0xF6"
+
+  # Safety and limits
+  min_speed: "20"
+  shutdown_lock_temp: "50"
+
+  # Polling intervals in milliseconds
+  poll_running_ms: "15000"
+  poll_idle_ms: "60000"
+  poll_after_command_ms: "5000"
+
+logger:
+  logs:
+    cc1101: ERROR
+
+spi:
+  clk_pin: ${clk_pin}
+  mosi_pin: ${mosi_pin}
+  miso_pin: ${miso_pin}
+
+globals:
+  - id: exo_seq
+    type: uint8_t
+    initial_value: "1"
+  - id: pend_type
+    type: int
+    initial_value: "0"
+  - id: pend_val
+    type: int
+    initial_value: "0"
+  - id: pend_tries
+    type: int
+    initial_value: "0"
+  - id: pend_deadline
+    type: uint32_t
+    initial_value: "0"
+  - id: last_running
+    type: bool
+    initial_value: "false"
+  - id: last_speed
+    type: int
+    initial_value: "-1"
+  - id: last_payload
+    type: std::vector<uint8_t>
+  - id: last_payload_ms
+    type: uint32_t
+    initial_value: "0"
+  - id: last_report_ms
+    type: uint32_t
+    initial_value: "0"
+  - id: last_poll_ms
+    type: uint32_t
+    initial_value: "0"
+  - id: fast_poll_until
+    type: uint32_t
+    initial_value: "0"
+
+# The CC1101 receives Z-Wave R2 (40 kbps 2-FSK) with inverted bit polarity.
+# It syncs on the bytes "<power unit node> 41" so that it is ready exactly when
+# the power unit's status report arrives (see docs/protocol.md, "Receive strategy").
+cc1101:
+  id: radio
+  cs_pin: ${cs_pin}
+  gdo0_pin: ${gdo0_pin}
+  frequency: ${frequency}
+  modulation_type: 2-FSK
+  symbol_rate: 40000
+  fsk_deviation: 20kHz
+  filter_bandwidth: 203kHz
+  packet_mode: true
+  packet_length: 32
+  crc_enable: false
+  whitening: false
+  sync_mode: 16/16
+  sync1: ${power_unit_sync}
+  sync0: 0xBE
+  on_packet:
+    then:
+      - lambda: |-
+          if (rssi < -90) return;
+          std::vector<uint8_t> f = {${home_id_0}, ${home_id_1}, ${home_id_2}, ${home_id_3}, ${power_unit_node}, 0x41};
+          for (auto b : x) f.push_back((uint8_t) (b ^ 0xFF));
+          uint8_t len = f[7];
+          if (len < 10 || len > f.size()) return;
+          uint8_t cs = 0xFF;
+          for (int i = 0; i < len - 1; i++) cs ^= f[i];
+          if (cs != f[len - 1]) {
+            ESP_LOGD("exodraft", "Checksum error, rssi=%.0f", rssi);
+            return;
+          }
+          std::vector<uint8_t> pl(f.begin() + 9, f.begin() + len - 1);
+          if (pl == id(last_payload) && millis() - id(last_payload_ms) < 2000) return;
+          id(last_payload) = pl;
+          id(last_payload_ms) = millis();
+
+          std::vector<uint8_t> frame(f.begin(), f.begin() + len);
+          ESP_LOGI("exodraft", "RX src=%u dst=%u rssi=%.0f foff=%.0f %s", f[4], f[8], rssi, freq_offset,
+                   format_hex_pretty(frame).c_str());
+          id(exo_rssi).publish_state(rssi);
+          if (!(len == 26 && f[9] == 0x91 && f[10] == 0x00 && f[11] == 0x04 && f[14] == 0x03 && f[15] == 0x0A)) return;
+
+          id(last_report_ms) = millis();
+          uint8_t mode = f[16];
+          bool running = (mode != 0);
+          int speed = f[24];
+          id(last_running) = running;
+          id(last_speed) = speed;
+
+          id(exo_power).publish_state((f[17] << 8) | f[18]);
+          id(exo_temp).publish_state((f[19] << 8) | f[20]);
+          id(exo_draught).publish_state((f[21] << 8) | f[22]);
+          id(exo_setpoint).publish_state(f[23]);
+          id(exo_speed).publish_state(speed);
+          id(exo_mode).publish_state(mode);
+
+          const char *mt;
+          switch (mode) {
+            case 0: mt = "Off"; break;
+            case 1: mt = "Start"; break;
+            case 2: mt = "Automatic"; break;
+            case 3: mt = "Boost"; break;
+            case 4: mt = "Manual"; break;
+            default: mt = nullptr;
+          }
+          if (mt) id(exo_mode_text).publish_state(mt);
+          else id(exo_mode_text).publish_state(str_sprintf("Unknown (%u)", mode));
+
+          if (id(pend_type) == 1 && running == (id(pend_val) == 1)) {
+            id(pend_type) = 0;
+            id(fast_poll_until) = millis() + 60000;
+            id(exo_cmd_status).publish_state(running ? "Start confirmed" : "Stop confirmed");
+          } else if (id(pend_type) == 2 && speed == id(pend_val)) {
+            id(pend_type) = 0;
+            id(fast_poll_until) = millis() + 30000;
+            id(exo_cmd_status).publish_state(str_sprintf("Speed %d %% confirmed", speed));
+          }
+          if (id(pend_type) != 1) id(exo_fan).publish_state(running);
+          if (id(pend_type) != 2) id(exo_speed_setting).publish_state(speed);
+
+script:
+  # Builds a singlecast frame from the panel's node ID to the power unit and transmits it.
+  # The CC1101 always sends its configured sync word after the preamble, so the frame
+  # carries its own Z-Wave preamble and start-of-frame byte (see docs/protocol.md).
+  - id: send_frame
+    mode: queued
+    parameters:
+      payload: int[]
+    then:
+      - cc1101.send_packet:
+          data: !lambda |-
+            id(exo_seq) = (id(exo_seq) % 15) + 1;
+            std::vector<uint8_t> fr = {${home_id_0}, ${home_id_1}, ${home_id_2}, ${home_id_3}, ${panel_node}, 0x41,
+                                       id(exo_seq), (uint8_t) (10 + payload.size()), ${power_unit_node}};
+            for (int b : payload) fr.push_back((uint8_t) b);
+            uint8_t cs = 0xFF;
+            for (auto b : fr) cs ^= b;
+            fr.push_back(cs);
+            std::vector<uint8_t> out(10, 0xAA);
+            out.push_back(0x0F);
+            for (auto b : fr) out.push_back(b ^ 0xFF);
+            while (out.size() < 32) out.push_back(0xAA);
+            ESP_LOGD("exodraft", "TX %s", format_hex_pretty(fr).c_str());
+            return out;
+      - delay: 10ms
+      - cc1101.begin_rx
+
+  - id: poll_status
+    mode: single
+    then:
+      - lambda: |-
+          id(last_poll_ms) = millis();
+          id(send_frame).execute(std::vector<int>{0x91, 0x00, 0x04, 0x01, 0x01, 0x02, 0x0A});
+
+  - id: tx_pending
+    mode: queued
+    then:
+      - lambda: |-
+          if (id(pend_type) == 1) {
+            ESP_LOGI("exodraft", "Sending %s (attempt %d)", id(pend_val) ? "START" : "STOP", id(pend_tries));
+            id(send_frame).execute(std::vector<int>{0x91, 0x00, 0x04, 0x01, 0x01, 0x01, 0x01, id(pend_val)});
+          } else if (id(pend_type) == 2) {
+            ESP_LOGI("exodraft", "Sending speed %d %% (attempt %d)", id(pend_val), id(pend_tries));
+            id(send_frame).execute(std::vector<int>{0x26, 0x01, id(pend_val)});
+          }
+      - delay: 300ms
+      - script.execute: poll_status
+
+  - id: cmd_power
+    mode: restart
+    parameters:
+      start: bool
+    then:
+      - lambda: |-
+          id(pend_type) = 1;
+          id(pend_val) = start ? 1 : 0;
+          id(pend_tries) = 1;
+          id(pend_deadline) = millis() + 3000;
+          id(exo_fan).publish_state(start);
+          id(exo_cmd_status).publish_state(start ? "Starting, waiting for confirmation" : "Stopping, waiting for confirmation");
+          id(tx_pending).execute();
+
+  - id: cmd_speed
+    mode: restart
+    parameters:
+      level: int
+    then:
+      - lambda: |-
+          int s = level < ${min_speed} ? ${min_speed} : (level > 100 ? 100 : level);
+          id(pend_type) = 2;
+          id(pend_val) = s;
+          id(pend_tries) = 1;
+          id(pend_deadline) = millis() + 3000;
+          id(exo_speed_setting).publish_state(s);
+          id(exo_cmd_status).publish_state(str_sprintf("Setting %d %%, waiting for confirmation", s));
+          id(tx_pending).execute();
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          uint32_t now = millis();
+          if (id(pend_type) == 0) {
+            uint32_t period;
+            if (id(last_report_ms) == 0) period = 5000;
+            else if ((int32_t) (id(fast_poll_until) - now) > 0) period = ${poll_after_command_ms};
+            else if (id(last_running)) period = ${poll_running_ms};
+            else period = ${poll_idle_ms};
+            uint32_t last = id(last_report_ms);
+            if ((int32_t) (id(last_poll_ms) - last) > 0) last = id(last_poll_ms);
+            if (now - last >= period) id(poll_status).execute();
+            return;
+          }
+          if ((int32_t) (now - id(pend_deadline)) < 0) return;
+          if (id(pend_tries) < 3) {
+            id(pend_tries)++;
+            id(pend_deadline) = now + 3000;
+            ESP_LOGW("exodraft", "No confirmation, resending (attempt %d)", id(pend_tries));
+            id(tx_pending).execute();
+            return;
+          }
+          int t = id(pend_type);
+          id(pend_type) = 0;
+          ESP_LOGE("exodraft", "Command not confirmed after 3 attempts");
+          id(exo_cmd_status).publish_state("No confirmation from the power unit");
+          if (t == 1) id(exo_fan).publish_state(id(last_running));
+          if (t == 2 && id(last_speed) >= 0) id(exo_speed_setting).publish_state(id(last_speed));
+
+switch:
+  - platform: template
+    id: exo_fan
+    name: Fan
+    icon: mdi:fan
+    optimistic: false
+    restore_mode: DISABLED
+    turn_on_action:
+      - script.execute:
+          id: cmd_power
+          start: true
+    turn_off_action:
+      - if:
+          condition:
+            lambda: "return !std::isnan(id(exo_temp).state) && id(exo_temp).state < ${shutdown_lock_temp};"
+          then:
+            - script.execute:
+                id: cmd_power
+                start: false
+          else:
+            - logger.log:
+                level: WARN
+                format: "Stop blocked: flue temperature unknown or at least ${shutdown_lock_temp} °C"
+            - lambda: |-
+                id(exo_fan).publish_state(true);
+                id(exo_cmd_status).publish_state("Stop blocked, the flue is hot");
+
+number:
+  - platform: template
+    id: exo_speed_setting
+    name: Fan speed setting
+    icon: mdi:speedometer
+    min_value: ${min_speed}
+    max_value: 100
+    step: 10
+    unit_of_measurement: "%"
+    mode: slider
+    optimistic: false
+    update_interval: never
+    set_action:
+      - script.execute:
+          id: cmd_speed
+          level: !lambda "return (int) x;"
+
+button:
+  - platform: template
+    name: Refresh status
+    icon: mdi:refresh
+    entity_category: diagnostic
+    on_press:
+      - script.execute: poll_status
+
+text_sensor:
+  - platform: template
+    id: exo_mode_text
+    name: Operating mode
+    icon: mdi:fan-auto
+    update_interval: never
+  - platform: template
+    id: exo_cmd_status
+    name: Command status
+    icon: mdi:message-processing
+    entity_category: diagnostic
+    update_interval: never
+
+sensor:
+  - platform: template
+    id: exo_temp
+    name: Flue temperature
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: never
+  - platform: template
+    id: exo_power
+    name: Fan power
+    unit_of_measurement: W
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: never
+  - platform: template
+    id: exo_draught
+    name: Draught
+    icon: mdi:weather-windy
+    unit_of_measurement: Pa
+    device_class: pressure
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: never
+  - platform: template
+    id: exo_setpoint
+    name: Pressure setpoint
+    icon: mdi:target
+    unit_of_measurement: Pa
+    device_class: pressure
+    accuracy_decimals: 0
+    update_interval: never
+  - platform: template
+    id: exo_speed
+    name: Fan speed
+    icon: mdi:fan
+    unit_of_measurement: "%"
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: never
+  - platform: template
+    id: exo_mode
+    name: Operating mode (raw)
+    entity_category: diagnostic
+    accuracy_decimals: 0
+    update_interval: never
+  - platform: template
+    id: exo_rssi
+    name: Radio signal
+    unit_of_measurement: dBm
+    device_class: signal_strength
+    entity_category: diagnostic
+    accuracy_decimals: 0
+    update_interval: never

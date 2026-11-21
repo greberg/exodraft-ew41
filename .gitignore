@@ -1,0 +1,6 @@
+secrets.yaml
+.esphome/
+esphome/ci-device.yaml
+__pycache__/
+.DS_Store
+*.zip
