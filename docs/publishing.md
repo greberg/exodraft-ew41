@@ -22,10 +22,18 @@ git push -u origin main
 
 ## 2. Make a release
 
-HACS installs from GitHub releases when they exist.
+HACS shows and installs GitHub releases. Without a release it falls back to the latest commit hash.
 
-1. Bump `CARD_VERSION` in `dist/exodraft-card.js` if needed.
-2. GitHub, *Releases*, *Draft a new release*, tag `v1.0.0`, publish.
+1. Bump `CARD_VERSION` in `dist/exodraft-card.js` (for example `1.1.0`).
+2. Add a `## [1.1.0] - <date>` section at the top of `CHANGELOG.md`.
+3. Commit, then tag and push:
+
+```
+git tag -a v1.1.0 -m "v1.1.0"
+git push origin main v1.1.0
+```
+
+The workflow in `.github/workflows/release.yml` then creates the GitHub release, with the changelog section as release notes and `exodraft-card.js` attached. It fails if the tag does not match `CARD_VERSION` or the changelog has no section for the version.
 
 ## 3. Check the HACS validation
 

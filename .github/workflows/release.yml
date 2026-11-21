@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check that the tag matches CARD_VERSION
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          card=$(sed -n 's/^const CARD_VERSION = "\(.*\)";$/\1/p' dist/exodraft-card.js)
+          echo "Tag: $tag, card: $card"
+          if [ "$tag" != "$card" ]; then
+            echo "::error::Tag v$tag does not match CARD_VERSION $card in dist/exodraft-card.js"
+            exit 1
+          fi
+
+      - name: Check card syntax
+        run: node --check dist/exodraft-card.js
+
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          awk -v v="${GITHUB_REF_NAME#v}" '
+            $0 ~ "^## \\[?" v "\\]?" {f=1; next}
+            f && /^## / {exit}
+            f {print}
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::No section for ${GITHUB_REF_NAME#v} in CHANGELOG.md"
+            exit 1
+          fi
+          cat notes.md
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/exodraft-card.js \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file notes.md
