@@ -100,6 +100,8 @@ Verified against the panel's fan test screen: 30 %, 26/27 Pa, setpoint 100 Pa, 2
 | 2 | While burning, varying speed | Automatic (*hypothesis*) |
 | 3 | While burning, 100 % | Boost or refuelling (*hypothesis*) |
 | 4 | After manual speed changes | Manual |
+| 11 | Panel shows *Lägg i ved* (add wood), 30 %, flue around 50 °C | Add wood |
+| 12 | Panel shows *Efterdrift* (after-run), 30 %, flue around 35 °C while cooling down | After-run |
 
 When the fan is off, the speed field still holds the configured speed.
 

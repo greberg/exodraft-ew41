@@ -149,6 +149,8 @@ cc1101:
             case 2: mt = "Automatic"; break;
             case 3: mt = "Boost"; break;
             case 4: mt = "Manual"; break;
+            case 11: mt = "Add wood"; break;
+            case 12: mt = "After-run"; break;
             default: mt = nullptr;
           }
           if (mt) id(exo_mode_text).publish_state(mt);

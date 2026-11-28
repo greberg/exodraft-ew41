@@ -7,7 +7,7 @@ Read and control an **exodraft EW41 wireless flue gas fan** from Home Assistant,
 What you get in Home Assistant:
 
 - Flue temperature, draught (Pa), pressure setpoint, fan power (W) and fan speed (%)
-- Operating mode (Off, Start, Automatic, Boost, Manual)
+- Operating mode (Off, Start, Automatic, Boost, Manual, Add wood, After-run)
 - Start and stop the fan, and set its speed from 20 to 100 %
 - A safety lock that refuses to stop the fan while the flue is hot
 - Commands that are confirmed by the power unit and resent automatically if they get lost
@@ -143,7 +143,7 @@ The speed buttons are debounced: tap a few times and only the final value is sen
 | Pressure setpoint | sensor | Pa, the target pressure configured in the panel |
 | Fan power | sensor | W |
 | Fan speed | sensor | % reported by the power unit |
-| Operating mode | text sensor | Off, Start, Automatic, Boost, Manual |
+| Operating mode | text sensor | Off, Start, Automatic, Boost, Manual, Add wood, After-run |
 | Command status | text sensor | What the last command is doing (diagnostic) |
 | Operating mode (raw) | sensor | The raw mode byte (diagnostic) |
 | Radio signal | sensor | dBm of the last received report (diagnostic) |

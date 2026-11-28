@@ -4,7 +4,7 @@
  * MIT License. Not affiliated with exodraft a/s.
  */
 
-const CARD_VERSION = "1.0.1";
+const CARD_VERSION = "1.1.0";
 
 const DEFAULT_ENTITIES = {
   fan: "switch.{p}_fan",
