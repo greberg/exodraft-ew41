@@ -2,6 +2,11 @@
 
 All notable changes to the card and the ESPHome package. Versions follow [semantic versioning](https://semver.org/): a major bump means something in your configuration must change, a minor bump adds features, a patch fixes bugs.
 
+## [1.2.0] - 2026-11-28
+
+- ESPHome package: the operating modes and command status texts can be translated with `text_` substitutions. English stays the default; the README has a Swedish set.
+- Card: Swedish warnings ("spärrad", "ingen bekräftelse") are coloured as warnings too.
+
 ## [1.1.0] - 2026-11-28
 
 - ESPHome package: two more operating modes, 11 *Add wood* and 12 *After-run*, instead of *Unknown (11)* and *Unknown (12)*. Rebuild and install the device to get them.

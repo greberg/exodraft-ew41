@@ -132,6 +132,32 @@ entities:
 
 The speed buttons are debounced: tap a few times and only the final value is sent. While the power unit has not confirmed a new value, it blinks on the display.
 
+## Language
+
+The operating modes and command status messages are English by default. To translate them, override the `text_` substitutions in your device configuration. All of them are listed at the top of `esphome/exodraft-ew41.yaml`. Keep the `%u`, `%d` and `%%` placeholders. Swedish:
+
+```yaml
+substitutions:
+  text_mode_off: "Av"
+  text_mode_start: "Start"
+  text_mode_automatic: "Automatik"
+  text_mode_boost: "Boost"
+  text_mode_manual: "Manuell"
+  text_mode_add_wood: "Lägg i ved"
+  text_mode_after_run: "Efterdrift"
+  text_mode_unknown: "Okänt (%u)"
+  text_start_confirmed: "Start bekräftad"
+  text_stop_confirmed: "Stopp bekräftat"
+  text_speed_confirmed: "Varvtal %d %% bekräftat"
+  text_starting: "Startar, väntar på bekräftelse"
+  text_stopping: "Stoppar, väntar på bekräftelse"
+  text_setting_speed: "Ställer in %d %%, väntar på bekräftelse"
+  text_no_confirmation: "Ingen bekräftelse från styrboxen"
+  text_stop_blocked: "Avstängning spärrad, skorstenen är varm"
+```
+
+The card shows these texts as they are, and colours a status message as a warning when it says the stop is blocked or that no confirmation came, in English or Swedish.
+
 ## Entities
 
 | Entity | Type | Description |

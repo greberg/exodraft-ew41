@@ -4,7 +4,7 @@
  * MIT License. Not affiliated with exodraft a/s.
  */
 
-const CARD_VERSION = "1.1.0";
+const CARD_VERSION = "1.2.0";
 
 const DEFAULT_ENTITIES = {
   fan: "switch.{p}_fan",
@@ -294,7 +294,7 @@ class ExodraftCard extends HTMLElement {
       warn = this._message.warn;
     } else if (c.show_status && statusState && !["unknown", "unavailable", ""].includes(statusState.state)) {
       text = statusState.state;
-      warn = /blocked|no confirmation/i.test(text);
+      warn = /blocked|no confirmation|spärrad|ingen bekräftelse/i.test(text);
     }
     el.status.textContent = text;
     el.status.classList.toggle("warn", warn);

@@ -38,6 +38,25 @@ substitutions:
   poll_idle_ms: "60000"
   poll_after_command_ms: "5000"
 
+  # Texts shown in Home Assistant. Override them to translate, see README "Language".
+  # %u, %d and %% are placeholders and must stay. Do not use double quotes.
+  text_mode_off: "Off"
+  text_mode_start: "Start"
+  text_mode_automatic: "Automatic"
+  text_mode_boost: "Boost"
+  text_mode_manual: "Manual"
+  text_mode_add_wood: "Add wood"
+  text_mode_after_run: "After-run"
+  text_mode_unknown: "Unknown (%u)"
+  text_start_confirmed: "Start confirmed"
+  text_stop_confirmed: "Stop confirmed"
+  text_speed_confirmed: "Speed %d %% confirmed"
+  text_starting: "Starting, waiting for confirmation"
+  text_stopping: "Stopping, waiting for confirmation"
+  text_setting_speed: "Setting %d %%, waiting for confirmation"
+  text_no_confirmation: "No confirmation from the power unit"
+  text_stop_blocked: "Stop blocked, the flue is hot"
+
 logger:
   logs:
     cc1101: ERROR
@@ -144,26 +163,26 @@ cc1101:
 
           const char *mt;
           switch (mode) {
-            case 0: mt = "Off"; break;
-            case 1: mt = "Start"; break;
-            case 2: mt = "Automatic"; break;
-            case 3: mt = "Boost"; break;
-            case 4: mt = "Manual"; break;
-            case 11: mt = "Add wood"; break;
-            case 12: mt = "After-run"; break;
+            case 0: mt = "${text_mode_off}"; break;
+            case 1: mt = "${text_mode_start}"; break;
+            case 2: mt = "${text_mode_automatic}"; break;
+            case 3: mt = "${text_mode_boost}"; break;
+            case 4: mt = "${text_mode_manual}"; break;
+            case 11: mt = "${text_mode_add_wood}"; break;
+            case 12: mt = "${text_mode_after_run}"; break;
             default: mt = nullptr;
           }
           if (mt) id(exo_mode_text).publish_state(mt);
-          else id(exo_mode_text).publish_state(str_sprintf("Unknown (%u)", mode));
+          else id(exo_mode_text).publish_state(str_sprintf("${text_mode_unknown}", mode));
 
           if (id(pend_type) == 1 && running == (id(pend_val) == 1)) {
             id(pend_type) = 0;
             id(fast_poll_until) = millis() + 60000;
-            id(exo_cmd_status).publish_state(running ? "Start confirmed" : "Stop confirmed");
+            id(exo_cmd_status).publish_state(running ? "${text_start_confirmed}" : "${text_stop_confirmed}");
           } else if (id(pend_type) == 2 && speed == id(pend_val)) {
             id(pend_type) = 0;
             id(fast_poll_until) = millis() + 30000;
-            id(exo_cmd_status).publish_state(str_sprintf("Speed %d %% confirmed", speed));
+            id(exo_cmd_status).publish_state(str_sprintf("${text_speed_confirmed}", speed));
           }
           if (id(pend_type) != 1) id(exo_fan).publish_state(running);
           if (id(pend_type) != 2) id(exo_speed_setting).publish_state(speed);
@@ -227,7 +246,7 @@ script:
           id(pend_tries) = 1;
           id(pend_deadline) = millis() + 3000;
           id(exo_fan).publish_state(start);
-          id(exo_cmd_status).publish_state(start ? "Starting, waiting for confirmation" : "Stopping, waiting for confirmation");
+          id(exo_cmd_status).publish_state(start ? "${text_starting}" : "${text_stopping}");
           id(tx_pending).execute();
 
   - id: cmd_speed
@@ -242,7 +261,7 @@ script:
           id(pend_tries) = 1;
           id(pend_deadline) = millis() + 3000;
           id(exo_speed_setting).publish_state(s);
-          id(exo_cmd_status).publish_state(str_sprintf("Setting %d %%, waiting for confirmation", s));
+          id(exo_cmd_status).publish_state(str_sprintf("${text_setting_speed}", s));
           id(tx_pending).execute();
 
 interval:
@@ -272,7 +291,7 @@ interval:
           int t = id(pend_type);
           id(pend_type) = 0;
           ESP_LOGE("exodraft", "Command not confirmed after 3 attempts");
-          id(exo_cmd_status).publish_state("No confirmation from the power unit");
+          id(exo_cmd_status).publish_state("${text_no_confirmation}");
           if (t == 1) id(exo_fan).publish_state(id(last_running));
           if (t == 2 && id(last_speed) >= 0) id(exo_speed_setting).publish_state(id(last_speed));
 
@@ -301,7 +320,7 @@ switch:
                 format: "Stop blocked: flue temperature unknown or at least ${shutdown_lock_temp} °C"
             - lambda: |-
                 id(exo_fan).publish_state(true);
-                id(exo_cmd_status).publish_state("Stop blocked, the flue is hot");
+                id(exo_cmd_status).publish_state("${text_stop_blocked}");
 
 number:
   - platform: template
